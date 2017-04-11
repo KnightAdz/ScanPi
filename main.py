@@ -5,10 +5,12 @@ import product_functs
 import sqlite3
 import datetime
 
+
 #Settings
 msg = 1 #Flag for displaying more info 1 or 0
 
-#Tesco API is defunct
+
+#Old Tesco API is defunct
 #api_session_key = Tesco_functs.connect_to_tesco(msg)
 
 
@@ -20,23 +22,18 @@ while got_prod == 0:
     prd_ean = scan_functs.return_scan_value()
     print(prd_ean)
     #Below three lines for testing only
-    prd_desc = 'Test prod'
-    print(prd_desc + ' scanned')
-    got_prod = 1
+    #prd_desc = 'Test prod'
+    #print(prd_desc + ' scanned')
+    #got_prod = 1
+
     
     #Get product info
-    #prd_info = Tesco_functs.return_prod_info(prd_ean, api_session_key, msg)
+    prd_info = product_functs.searchEAN(prd_ean, msg)
+  
     
-    #Temporary uncomment
-#    prd_info = return_prod_info(prd_ean, api_session_key, msg)
-#
-#    if prd_info["TotalProductCount"] != 1:
-#        print(str(prd_info["TotalProductCount"]) + ' products found, something went wrong.')
-#    else:
-#        prd_desc = prd_info["Products"][0]["Name"]
-#        print(prd_desc + ' scanned')
-#        got_prod = 1
-    #Fake data for testing
+    prd_desc = prd_info["products"][0]["description"]
+    print(prd_desc + ' scanned')
+    got_prod = 1
 
 
 
