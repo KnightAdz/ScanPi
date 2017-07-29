@@ -15,6 +15,8 @@ conn = sqlite3.connect('database.db')
 curs = conn.cursor()
 
 #curs.execute("DELETE FROM stock2 WHERE ean = 5000119014436")
+#curs.execute("ALTER TABLE stock2 ADD COLUMN identifier INTEGER")
+
 
 # Execute an SQL query on the SQLite database and return results as a dataframe
 def sql_to_dataframe(query, pars=0):
@@ -54,45 +56,40 @@ def check_db_for_product(ean, sdate=0):
     else:
         a = curs.execute("SELECT SUM(qty) FROM stock2 WHERE ean = ? AND entry_date = ? AND end_date IS NULL", (ean,sdate))
 
-    exist_qty = 0
+    exist_qty = None
     for row in a:
         if row[0]:
             exist_qty = int(row[0])
     return exist_qty
 
 def add_to_database(prd_ean, prd_desc, nowdate):
-    # Action depends on whether more rows exist with this entry/start date
-    current_qty = check_db_for_product(prd_ean, nowdate)
+    # First check if we're about to create a duplicate row
+    same_item_today = check_db_for_product(prd_ean, nowdate)
 
-    if current_qty > 0:
-        # Update the qty
-        current_qty = current_qty + 1
-        curs.execute(
-            "UPDATE stock2 SET qty = ? WHERE ean = ? AND start_date = ? AND entry_date = ? AND end_date IS NULL",
-            (current_qty, prd_ean, nowdate, nowdate))
+    if same_item_today is None:
+        # Insert new row for this product into database with today as startdate and entry date, identifier 1
+        insert_data = (prd_ean, prd_desc, nowdate, 1, nowdate)
+        curs.execute("INSERT INTO stock2 VALUES(?,?,?,null,?,?,null,1)", insert_data)
+        print('Added to list')
     else:
         # Insert new row for this product into database with today as startdate and entry date
-        insert_data = (prd_ean, prd_desc, nowdate, 1, nowdate)
-        curs.execute("INSERT INTO stock2 VALUES(?,?,?,null,?,?,null)", insert_data)
-    print('Added to list')
+        insert_data = (prd_ean, prd_desc, nowdate, 1, nowdate, same_item_today+1)
+        curs.execute("INSERT INTO stock2 VALUES(?,?,?,null,?,?,null,?)", insert_data)
+        print('Added to list')
 
 def remove_from_database(prd_ean, prd_desc, nowdate):
-    # Act on row with earliest entry_date
+    # Act on row with earliest entry_date...
     a = curs.execute("SELECT MIN(entry_date) FROM stock2 WHERE ean = ? AND end_date IS NULL", (prd_ean,))
     for row in a:
         earliest_date = row[0]
-    # Get the qty on this row
-    a = curs.execute("SELECT SUM(qty) FROM stock2 WHERE ean = ? AND entry_date = ? AND end_date IS NULL",
-                     (prd_ean, earliest_date))
+    # ...and largest identifier
+    a = curs.execute("SELECT MAX(identifier) FROM stock2 WHERE ean = ? AND entry_date = ? AND end_date IS NULL", (prd_ean, earliest_date))
     for row in a:
-        early_qty = row[0]
+        max_identifier = row[0]
 
     # End date the row
-    update_data = (nowdate, prd_ean, earliest_date)
-    curs.execute("UPDATE stock2 SET end_date = ? WHERE ean = ? AND end_date IS NULL AND entry_date = ?", update_data)
-    # Add a new row with reduced qty
-    insert_data = (prd_ean, prd_desc, earliest_date, early_qty - 1, nowdate)
-    curs.execute("INSERT INTO stock2 VALUES(?,?,?,null,?,?,null)", insert_data)
+    update_data = (nowdate, prd_ean, earliest_date, max_identifier)
+    curs.execute("UPDATE stock2 SET end_date = ? WHERE ean = ? AND end_date IS NULL AND entry_date = ? AND identifier = ?", update_data)
 
 def current_info(prd_ean=0):
     # If product supplied, show info for that product only
@@ -102,9 +99,23 @@ def current_info(prd_ean=0):
         sentence = results[["qty", "desc"]].to_string(index=False, header=False) +  " were added on " + results['entry_date'].to_string(index=False, header=False)
         print(sentence)
     else:
-        print("Database now contains:")
-        results = sql_to_dataframe("SELECT * FROM stock2 WHERE end_date IS NULL")
-        print(results[["qty", "desc", "entry_date"]].to_string(index=False))
+        print("Cupboards now contain:")
+        results = sql_to_dataframe("SELECT SUM(qty) AS qty, desc, MIN(entry_date) AS date_1st_added FROM stock2 WHERE end_date IS NULL GROUP BY 2")
+        print(results[["qty", "desc", "date_1st_added"]].to_string(index=False))
+
+# Generate a list of products that we used to have but no longer have, ordered by reverse end date
+def show_shopping_list():
+    # Find products that we don't have any of anymore
+    all_prods = sql_to_dataframe("SELECT ean, desc, COUNT(*) AS all_recs, SUM(CASE WHEN end_date IS NOT NULL THEN 1 ELSE 0 END) AS ended_recs FROM stock2 GROUP BY 1,2")
+    all_prods = all_prods[all_prods["all_recs"] == all_prods["ended_recs"]]
+
+    if len(all_prods["ean"]) > 0:
+
+        print("You've run out of:")
+        #all_prods.sort_values("start_date", axis=0, ascending=False)
+        print(all_prods["desc"].to_string())
+    else:
+        print("You don't need anything")
 
 def main():
     # Use barcode scan info to search API for product information
@@ -116,9 +127,12 @@ def main():
     # Get current date, to be used later
     nowdate = datetime.datetime.now().strftime("%Y-%m-%d")
 
-    # If we do have entries for this product
-    if exist_qty > 0:
-        # There are multiple things we may want to do
+    # If we don't have entries for this product we must be wanting to add the product to the database
+    if exist_qty is None or exist_qty == 0:
+        add_to_database(prd_ean, prd_desc, nowdate)
+        print("Inserted into database")
+    elif exist_qty > 0:
+        # Otherwise there are multiple things we may want to do
         opt = input("Records found, would you like to Add, Remove or View? (a/r/v)")
         if opt == "A" or opt == "a":
             add_to_database(prd_ean, prd_desc, nowdate)
@@ -126,25 +140,15 @@ def main():
             remove_from_database(prd_ean, prd_desc, nowdate)
         if opt == "V" or opt == "v":
             current_info(prd_ean)
-    # If not, we must be wanting to add the product to the database
-    else:
-        insert_data = (prd_ean, prd_desc, nowdate, 1, nowdate)
-        a = curs.execute("INSERT INTO stock2 VALUES(?,?,?,null,?,?,null)",insert_data)
-        print("Inserted into database")
-
 
     # Show all products in the database
     current_info()
 
+    show_shopping_list()
+
     if msg:
         db = sql_to_dataframe("SELECT * FROM stock2")
         print(db.to_string())
-
-    #for row in curs.execute("SELECT * FROM stock2"):
-    #    print(row[1])
-
-    #prod_data = pd.DataFrame(curs.execute("SELECT * FROM stock2"))
-    #print(prod_data)
 
     conn.commit()
     conn.close()
