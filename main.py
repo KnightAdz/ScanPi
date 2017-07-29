@@ -14,6 +14,7 @@ msg = 1 #Flag for displaying more info 1 or 0
 conn = sqlite3.connect('database.db')
 curs = conn.cursor()
 
+#curs.execute("DELETE FROM stock2 WHERE ean = 5000119014436")
 
 # Execute an SQL query on the SQLite database and return results as a dataframe
 def sql_to_dataframe(query, pars=0):
@@ -47,8 +48,12 @@ def get_product_from_scan():
         return prd_ean, prd_desc
 
 # See if there is already stock for this product
-def check_db_for_product(ean):
-    a = curs.execute("SELECT SUM(qty) FROM stock2 WHERE ean = ? AND end_date IS NULL", (ean,))
+def check_db_for_product(ean, sdate=0):
+    if sdate == 0:
+        a = curs.execute("SELECT SUM(qty) FROM stock2 WHERE ean = ? AND end_date IS NULL", (ean,))
+    else:
+        a = curs.execute("SELECT SUM(qty) FROM stock2 WHERE ean = ? AND entry_date = ? AND end_date IS NULL", (ean,sdate))
+
     exist_qty = 0
     for row in a:
         if row[0]:
@@ -57,13 +62,7 @@ def check_db_for_product(ean):
 
 def add_to_database(prd_ean, prd_desc, nowdate):
     # Action depends on whether more rows exist with this entry/start date
-    res = sql_to_dataframe("SELECT SUM(IFNULL(qty,0)) AS qty FROM stock2 WHERE ean = :ean AND start_date = :sdate AND entry_date = :edate AND end_date IS NULL",
-                           {'ean': prd_ean, 'sdate': nowdate, 'edate': nowdate})
-
-    if res["qty"].iloc[0]:
-        current_qty = res["qty"].iloc[0]
-    else:
-        current_qty = 0
+    current_qty = check_db_for_product(prd_ean, nowdate)
 
     if current_qty > 0:
         # Update the qty
@@ -134,7 +133,12 @@ def main():
         print("Inserted into database")
 
 
+    # Show all products in the database
     current_info()
+
+    if msg:
+        db = sql_to_dataframe("SELECT * FROM stock2")
+        print(db.to_string())
 
     #for row in curs.execute("SELECT * FROM stock2"):
     #    print(row[1])
