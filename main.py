@@ -117,7 +117,7 @@ def show_shopping_list():
     else:
         print("You don't need anything")
 
-def main():
+def input_from_scan():
     # Use barcode scan info to search API for product information
     prd_ean, prd_desc = get_product_from_scan()
 
@@ -140,6 +140,25 @@ def main():
             remove_from_database(prd_ean, prd_desc, nowdate)
         if opt == "V" or opt == "v":
             current_info(prd_ean)
+
+def input_text():
+    # Get the text we want to search for
+    txt = input("Which product are you looking for?")
+    # Send a request to the grocery search API and receive a list of products
+    prd_info = product_functs.product_text_search(txt, msg)
+    for i in len(prd_info["products"]):
+        prd_desc = prd_info["products"][i]["description"]
+        print(prd_desc + ' found')
+
+
+def main():
+
+    # Ask whether we want to scan a barcode, or search for a product by text
+    ans = input("Barcode or text search? (b/t)")
+    if ans in ('b','B','1'):
+        input_from_scan()
+    else:
+        input_text()
 
     # Show all products in the database
     current_info()

@@ -8,8 +8,10 @@ import http.client, urllib.parse, urllib.error, base64
 #app_key = '4945D0D89D9FB604A11A'
 
 
-
-
+headers = {
+    # Request headers
+    'Ocp-Apim-Subscription-Key': 'a55592d63ae2410eb7cffd2d3778885b ',
+}
 
 #
 #Function to grab json data from a given url
@@ -18,8 +20,6 @@ def datafromurl(url):
     r = urllib.request.urlopen(url)
     reader = codecs.getreader('utf-8')
     return json.load(reader(r))
-	
-
 
 ###
 #Login and get session key (Old API function)
@@ -60,23 +60,15 @@ def return_prod_info(EAN, session_key, msg):
 def searchEAN(EAN, msg):	
     if msg == 1:
         print('Searching for product...')
-        
-    headers = {
-    # Request headers
-    'Ocp-Apim-Subscription-Key': 'a55592d63ae2410eb7cffd2d3778885b ',
-    }
     
     # Request parameters
     params = urllib.parse.urlencode({'gtin': EAN})
-  
- 
     
     try:
         conn = http.client.HTTPSConnection('dev.tescolabs.com')
         conn.request("GET", "/product/?%s" % params, "{body}", headers)
         response = conn.getresponse()
         data = response.read()
-
 
     except Exception as e:
         print("[Errno {0}] {1}".format(e.errno, e.strerror))
@@ -89,12 +81,29 @@ def searchEAN(EAN, msg):
     jsondata = json.loads(data)      
     
     return jsondata
-
-
-
-
-
-
 ####################################
 
+def product_text_search(txt, msg):
 
+    if msg == 1:
+        print('Searching for product...')
+
+    params = urllib.parse.urlencode({'query': txt, 'offset': 0, 'limit' : 9})
+
+    try:
+        conn = http.client.HTTPSConnection('dev.tescolabs.com')
+        conn.request("GET", "/grocery/products/?query={query}&offset={offset}&limit={limit}&%s" % params, "{body}", headers)
+        response = conn.getresponse()
+        data = response.read()
+        conn.close()
+    except Exception as e:
+        print("[Errno {0}] {1}".format(e.errno, e.strerror))
+
+    if msg == 1:
+        print(data)
+
+    jsondata = json.loads(data)
+
+    return jsondata
+
+####################################
