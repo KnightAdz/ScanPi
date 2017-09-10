@@ -53,10 +53,10 @@ def add_to_basket(Tesco_prod_id):
     # load maker key from file
     maker_key_file = open("Maker key.txt")
     maker_key = maker_key_file.readline()
-    print(maker_key)
+    #print(maker_key)
 
     # prepare request
-    action = "product_scann"
+    action = "product_scanned"
 
     product_id = {}
     product_id["value1"] = Tesco_prod_id
@@ -67,3 +67,4 @@ def add_to_basket(Tesco_prod_id):
     # make request to IFTTT server
     r = requests.post(url_request, data=product_id)
     print(r)
+    return r

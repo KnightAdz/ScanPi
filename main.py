@@ -1,6 +1,7 @@
 
 import scan_functs
 import product_functs
+import Tesco_functs
 #import SQL_functs
 import sqlite3
 import datetime
@@ -32,8 +33,8 @@ def get_product_from_scan():
 
     while got_prod == 0:
         print("Please scan")
-        # prd_ean = scan_functs.return_scan_value()
-        prd_ean = 5000119014436
+        prd_ean = scan_functs.return_scan_value()
+        #prd_ean = 5000119014436
         print(prd_ean)
         # Below three lines for testing only
         # prd_desc = 'Test prod'
@@ -44,10 +45,11 @@ def get_product_from_scan():
         prd_info = product_functs.searchEAN(prd_ean, msg)
 
         prd_desc = prd_info["products"][0]["description"]
+        tesco_prod_id = prd_info["products"][0]["tpnc"]
         print(prd_desc + ' scanned')
         got_prod = 1
 
-        return prd_ean, prd_desc
+        return tesco_prod_id, prd_desc
 
 # See if there is already stock for this product
 def check_db_for_product(ean, sdate=0):
@@ -121,25 +123,34 @@ def input_from_scan():
     # Use barcode scan info to search API for product information
     prd_ean, prd_desc = get_product_from_scan()
 
-    # Check if we already have information on this product
-    exist_qty = check_db_for_product(prd_ean)
-
     # Get current date, to be used later
     nowdate = datetime.datetime.now().strftime("%Y-%m-%d")
 
-    # If we don't have entries for this product we must be wanting to add the product to the database
-    if exist_qty is None or exist_qty == 0:
+    # If scanned we want to add the product to our basket
+    res = Tesco_functs.add_to_basket(prd_ean)
+    print("Added to basket")
+
+    # Check if we already have information on this product
+    exist_qty = check_db_for_product(prd_ean)
+
+    # Let's assume that we're also throwing one out, so end date one row and add a new one
+    if exist_qty is not None and exist_qty > 0:
+        remove_from_database(prd_ean, prd_desc, nowdate)
         add_to_database(prd_ean, prd_desc, nowdate)
         print("Inserted into database")
-    elif exist_qty > 0:
+    elif exist_qty is None or exist_qty == 0:
+        add_to_database(prd_ean, prd_desc, nowdate)
+        print("Inserted into database")
+    #elif exist_qty > 0:
         # Otherwise there are multiple things we may want to do
-        opt = input("Records found, would you like to Add, Remove or View? (a/r/v)")
-        if opt == "A" or opt == "a":
-            add_to_database(prd_ean, prd_desc, nowdate)
-        if opt == "R" or opt == "r":
-            remove_from_database(prd_ean, prd_desc, nowdate)
-        if opt == "V" or opt == "v":
-            current_info(prd_ean)
+        #opt = input("Records found, would you like to Add, Remove or View? (a/r/v)")
+        #if opt == "A" or opt == "a":
+        #    add_to_database(prd_ean, prd_desc, nowdate)
+        #if opt == "R" or opt == "r":
+        #    remove_from_database(prd_ean, prd_desc, nowdate)
+        #if opt == "V" or opt == "v":
+        #    current_info(prd_ean)
+
 
 def input_text():
     # Get the text we want to search for
@@ -154,11 +165,12 @@ def input_text():
 def main():
 
     # Ask whether we want to scan a barcode, or search for a product by text
-    ans = input("Barcode or text search? (b/t)")
-    if ans in ('b','B','1'):
-        input_from_scan()
-    else:
-        input_text()
+    #ans = input("Barcode or text search? (b/t)")
+    #if ans in ('b','B','1'):
+
+    input_from_scan()
+    #else:
+    #    input_text()
 
     # Show all products in the database
     current_info()
